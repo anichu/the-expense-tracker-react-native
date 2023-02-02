@@ -1,15 +1,26 @@
 import { StyleSheet, Text, View } from "react-native";
-import React, { useContext, useLayoutEffect } from "react";
+import React, { useContext, useLayoutEffect, useState } from "react";
 import IconButton from "../components/UI/IconButton";
 import { GlobalStyles } from "../constants/styles";
 import Button from "../components/UI/Button";
 import { ExpenseContext } from "../store/expenses-context";
 import ExpenseForm from "../components/ManageExpense/ExpenseForm";
+import LoadingOverLay from "../components/UI/LoadingOverlay";
+import {
+	deleteExpenseBackend,
+	storeExpense,
+	updateExpenseBackend,
+} from "../utils/http";
+import ErrorOverlay from "../components/UI/ErrorOverlay";
 
 const ManageExpense = ({ route, navigation }) => {
 	const { expenses } = useContext(ExpenseContext);
+	const [error, setError] = useState("");
+	const [isSubmitting, setIsSubmitting] = useState(false);
+
 	const { deleteExpense, addExpense, updateExpense } =
 		useContext(ExpenseContext);
+
 	const editExpenseId = route?.params?.expenseId;
 	const isEditing = !!editExpenseId;
 
@@ -23,22 +34,50 @@ const ManageExpense = ({ route, navigation }) => {
 		});
 	}, [navigation, isEditing]);
 
-	const deleteExpenseHandler = () => {
+	const deleteExpenseHandler = async () => {
 		deleteExpense(editExpenseId);
+		setIsSubmitting(true);
+		await deleteExpenseBackend(editExpenseId);
+		setIsSubmitting(false);
 		navigation.goBack();
 	};
 
 	const cancelHandler = () => {
 		navigation.goBack();
 	};
-	const confirmHandler = (expenseData) => {
+
+	const confirmHandler = async (expenseData) => {
 		if (isEditing) {
-			updateExpense(editExpenseId, expenseData);
+			setIsSubmitting(true);
+			try {
+				updateExpense(editExpenseId, expenseData);
+				await updateExpenseBackend(editExpenseId, expenseData);
+			} catch (error) {
+				setError("Could not fetch expenses!!!");
+			}
+			setIsSubmitting(false);
 		} else {
-			addExpense(expenseData);
+			setIsSubmitting(true);
+
+			try {
+				const id = await storeExpense(expenseData);
+				addExpense({ ...expenseData, id });
+			} catch (error) {
+				setError("Could not fetch expenses!!!");
+			}
+
+			setIsSubmitting(false);
 		}
 		navigation.goBack();
 	};
+
+	if (error && !isSubmitting) {
+		return <ErrorOverlay message={error} />;
+	}
+
+	if (isSubmitting) {
+		return <LoadingOverLay />;
+	}
 
 	return (
 		<View style={styles.container}>
